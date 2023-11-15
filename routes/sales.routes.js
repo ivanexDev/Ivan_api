@@ -2,11 +2,56 @@ const express = require("express");
 const router = express.Router();
 const Sale = require("../models/sales.model"); // Asegúrate de que la ruta sea correcta
 
+const PERPAGE = 10;
+
 // Endpoint para obtener todas las ventas
 router.get("/", async (req, res) => {
   try {
     const sales = await Sale.find();
     res.json(sales);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Endpoint para obtener las ventas por pagina
+router.get("/:page", async (req, res) => {
+  try {
+    const page = parseInt(req.params.page ?? "1", 10);
+    const skip = (page - 1) * PERPAGE;
+
+    const totalSales = await Sale.countDocuments({})
+
+    if (totalSales === 0) {
+      return {
+        sales: [],
+        info: {
+          currentPage: page,
+          totalPages: 0,
+          totalItems: 0,
+          perPage: 0,
+        },
+      };
+    }
+
+    if (skip >= totalSales) {
+      throw new Error(404, "No se ha encontrado la página.");
+    }
+
+    const sales = await Sale.find().skip(skip).limit(PERPAGE);
+
+    const totalPages = Math.ceil(totalSales / PERPAGE);
+
+    const response = {
+      sales: sales,
+      info: {
+        currentPage: page,
+        totalPages,
+        totalItems: totalSales,
+        perPage: PERPAGE,
+      },
+    };
+    res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -58,19 +103,21 @@ router.put("/:id", getSale, async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-    try {
-      const deletedSale = await Sale.findByIdAndDelete(req.params.id);
-  
-      if (!deletedSale) {
-        return res.status(404).json({ message: "Venta no encontrada" });
-      }
-  
-      res.json({ message: "Venta eliminada correctamente" });
-    } catch (error) {
-      console.error("Error al eliminar la venta:", error.message);
-      res.status(500).json({ message: "Error al eliminar la venta", error: error.message });
+  try {
+    const deletedSale = await Sale.findByIdAndDelete(req.params.id);
+
+    if (!deletedSale) {
+      return res.status(404).json({ message: "Venta no encontrada" });
     }
-  });
+
+    res.json({ message: "Venta eliminada correctamente" });
+  } catch (error) {
+    console.error("Error al eliminar la venta:", error.message);
+    res
+      .status(500)
+      .json({ message: "Error al eliminar la venta", error: error.message });
+  }
+});
 
 // Middleware para obtener una venta por ID
 async function getSale(req, res, next) {
